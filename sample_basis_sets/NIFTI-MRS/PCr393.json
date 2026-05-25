@@ -1,0 +1,14 @@
+{
+    "SpectrometerFrequency": [
+        123261801.0
+    ],
+    "ResonantNucleus": [
+        "1H"
+    ],
+    "ConversionMethod": "spec2nii v0.8.7",
+    "ConversionTime": "2026-05-23T09:39:48.514",
+    "OriginalFile": [
+        "PCr393.raw"
+    ],
+    "SpectralWidth": 4000.0
+}

@@ -1,0 +1,445 @@
+"""
+writers/write_osprey.py
+Basis Set Converter — Osprey writer
+
+Translates createOspreyBasisSet.m to Python.
+Assembles a list of core struct dicts into an Osprey-compatible BASIS .mat file.
+
+Pipeline (confirmed from createOspreyBasisSet.m):
+    1. Apply name mapping (MARSS names → Osprey names)
+    2. Skip SKIP entries and duplicates
+    3. Zero-pad FIDs to targetN if needed
+    4. DC-correct each FID (remove mean of last 10%)
+    5. Compute specs = fftshift(fft(fids))   ← Osprey uses fft NOT ifft
+    6. Estimate one-proton area from Cr (3.93 ppm window)
+    7. Rescale MM/Lip to proton-equivalent amplitudes
+    8. Add synthetic H2O Lorentzian at 4.68 ppm
+    9. Optionally add parametric MM/Lip Gaussians for missing components
+   10. Reorder: metabolites first, MM/Lip/H2O last
+   11. Normalize: divide by max(abs(real(specs)))
+   12. Assemble and save BASIS struct as .mat v7.3
+
+Entry point:
+    write_osprey(basis_list, outpath, target_n, add_mm, te, sequence)
+"""
+
+import os
+import numpy as np
+import scipy.io as sio
+
+
+############## Name mapping (MARSS filename stems → Osprey names) ##############
+# 'SKIP' means the metabolite is excluded from the Osprey basis set
+
+NAME_MAP = {
+    'Asc'     : 'Asc',
+    'Asp'     : 'Asp',
+    'Cho'     : 'PCh',
+    'Cr391'   : 'Cr',
+    'CrNo391' : 'CrCH2',
+    'GABA'    : 'GABA',
+    'Glc'     : 'Glc',
+    'Gln'     : 'Gln',
+    'Glu'     : 'Glu',
+    'Gly'     : 'Gly',
+    'GPC'     : 'GPC',
+    'GSH'     : 'GSH',
+    'Lac'     : 'Lac',
+    'ml'      : 'mI',
+    'mI'      : 'mI',
+    'MM'      : 'SKIP',      # composite MM — replaced by parametric components
+    'MM09'    : 'Lip09',
+    'NAA'     : 'NAA',
+    'NAAG'    : 'NAAG',
+    'PCr393'  : 'PCr',
+    'PCrNo393': 'SKIP',      # no standard Osprey name
+    'PE'      : 'PE',
+    'sl'      : 'sI',
+    'sI'      : 'sI',
+    'Tau'     : 'Tau',
+}
+
+# MM/Lip proton-equivalent counts for rescaling
+MM_LIP_SCALING = {
+    'MM09'  : 3,
+    'MM12'  : 2,
+    'MM14'  : 2,
+    'MM17'  : 2,
+    'MM20'  : 11.4,
+    'Lip09' : 3,
+    'Lip13' : 4,
+    'Lip20' : 2.87,
+}
+
+# Osprey MM/Lip names — used for reordering
+MM_NAMES = {'MM09','MM12','MM14','MM17','MM20',
+            'Lip09','Lip13','Lip20','H2O'}
+
+
+############## Main entry point ##############
+
+def write_osprey(basis_list, outpath,
+                 target_n=0, add_mm=True,
+                 te=30.0, sequence='unedited'):
+    """
+    Assemble and save an Osprey BASIS .mat file.
+
+    Parameters
+    ----------
+    basis_list : list of core struct dicts
+        Each dict must have: fid, sw, sf, n, name
+    outpath    : str, full path for output .mat file
+    target_n   : int, target spectral points (0 = native size)
+    add_mm     : bool, add parametric MM/Lip for missing components
+    te         : float, echo time in ms
+    sequence   : str, e.g. 'unedited'
+    """
+    outpath = os.path.abspath(outpath)
+    os.makedirs(os.path.dirname(outpath) or '.', exist_ok=True)
+
+    if not basis_list:
+        raise RuntimeError("basis_list is empty")
+
+    ############## Step 1: Apply name mapping, skip duplicates ##############
+    met_names = []
+    met_fids  = []
+    sw = sf = n_native = center_freq = None
+
+    for core in basis_list:
+        stem     = core['name']
+        osp_name = NAME_MAP.get(stem, stem)   # use original name if not in map
+
+        if osp_name == 'SKIP':
+            print(f"  Skipping (SKIP): {stem}")
+            continue
+
+        if osp_name in met_names:
+            print(f"  Skipping duplicate '{osp_name}' from: {stem}")
+            continue
+
+        # Store reference parameters from first valid metabolite
+        if sw is None:
+            sw          = float(core['sw'])
+            sf          = float(core['sf'])          # MHz
+            n_native    = int(core['n'])
+            center_freq = float(core.get('centerFreq') or
+                                core.get('ppmCalib') or 4.68)
+
+        met_names.append(osp_name)
+        met_fids.append(np.asarray(core['fid']).ravel().astype(complex))
+        print(f"  Loaded: {stem:15s} → {osp_name}")
+
+    if not met_names:
+        raise RuntimeError("No valid basis functions loaded after name mapping.")
+
+    ############## Step 2: Determine final spectral size ##############
+    if target_n == 0:
+        final_n = n_native
+    elif target_n < n_native:
+        print(f"  WARNING: target_n ({target_n}) < native n ({n_native}); using native.")
+        final_n = n_native
+    else:
+        final_n = target_n
+
+    print(f"\n  Native n={n_native}, final n={final_n}")
+
+    ############### Step 3: Spectral axes ##############
+    dt      = 1.0 / sw
+    Bo      = sf / 42.577
+    hzppm   = sf               # numerically equal (sf in MHz = Hz/ppm)
+    t       = np.arange(final_n) * dt
+    f_axis  = (np.arange(final_n) - final_n / 2) * (sw / final_n)
+    ppm_axis= f_axis / hzppm + center_freq
+
+    ############### Step 4: Build fids / specs with DC correction ##############
+    n_mets = len(met_names)
+    fids   = np.zeros((final_n, n_mets), dtype=complex)
+    specs  = np.zeros((final_n, n_mets), dtype=complex)
+
+    for kk, fid in enumerate(met_fids):
+        pad_fid = np.zeros(final_n, dtype=complex)
+        copy_len = min(len(fid), final_n)
+        pad_fid[:copy_len] = fid[:copy_len]
+
+        # DC correction: remove mean of last 10% of FID
+        dc_start = round(0.9 * final_n)
+        if final_n - dc_start > 1:
+            pad_fid -= np.mean(pad_fid[dc_start:])
+
+        fids[:, kk]  = pad_fid
+        specs[:, kk] = np.fft.fftshift(np.fft.fft(pad_fid))
+
+    ############### Step 5: One-proton area estimate ##############
+    one_proton_area = _estimate_one_proton_area(specs, met_names, ppm_axis)
+
+    ############### Step 6: Rescale MM/Lip to proton-equivalent amplitudes ##############
+    if one_proton_area > 0:
+        print("\n  Rescaling MM/Lip basis functions:")
+        for kk, name in enumerate(met_names):
+            if name in MM_LIP_SCALING:
+                n_prot       = MM_LIP_SCALING[name]
+                current_area = np.sum(np.real(specs[:, kk]))
+                if abs(current_area) > 0:
+                    scale         = (n_prot * one_proton_area) / current_area
+                    fids[:, kk]  *= scale
+                    specs[:, kk] *= scale
+                    print(f"    {name:8s}: scale={scale:.4f}  ({n_prot} proton-equiv)")
+    else:
+        print("  WARNING: oneProtonArea=0; MM/Lip functions will NOT be rescaled.")
+
+    ############### Step 7: Add synthetic H2O ##############
+    if 'H2O' not in met_names:
+        print("\n  Adding synthetic H2O Lorentzian at 4.68 ppm.")
+        amp = max(2 * one_proton_area,
+                  np.max(np.abs(np.real(specs))) * 0.05) if one_proton_area > 0 \
+              else np.max(np.abs(np.real(specs))) * 0.05
+        h2o_fid, h2o_spec = _make_lorentzian(
+            final_n, sw, hzppm, 4.68, 0.1 * hzppm, center_freq, amp
+        )
+        fids  = np.column_stack([fids,  h2o_fid])
+        specs = np.column_stack([specs, h2o_spec])
+        met_names.append('H2O')
+        n_mets += 1
+
+    ############### Step 8: Optionally add parametric MM/Lip ##############
+    added_mm_names = []
+    if add_mm and one_proton_area > 0:
+        print("\n  Adding parametric MM/Lip for missing components:")
+        mm_fids, mm_specs, mm_names = _build_mm_lipids(
+            final_n, sw, hzppm, center_freq, one_proton_area
+        )
+        for rr, mm_name in enumerate(mm_names):
+            if mm_name not in met_names:
+                fids  = np.column_stack([fids,  mm_fids[:, rr]])
+                specs = np.column_stack([specs, mm_specs[:, rr]])
+                met_names.append(mm_name)
+                added_mm_names.append(mm_name)
+                n_mets += 1
+                print(f"    Added: {mm_name}")
+            else:
+                print(f"    Skipped (already present): {mm_name}")
+
+    ############### Step 9: Reorder — metabolites first, MM/Lip/H2O last ##############
+    known_mm = MM_NAMES | set(added_mm_names)
+    is_mm    = [name in known_mm for name in met_names]
+    met_idx  = [i for i, m in enumerate(is_mm) if not m]
+    mm_idx   = [i for i, m in enumerate(is_mm) if m]
+    reorder  = met_idx + mm_idx
+
+    fids      = fids[:, reorder]
+    specs     = specs[:, reorder]
+    met_names = [met_names[i] for i in reorder]
+
+    n_mm_count  = len(mm_idx)
+    n_mets_only = len(met_idx)
+
+    ############### Step 10: Normalize ##############
+    scale_factor = np.max(np.abs(np.real(specs)))
+    if scale_factor > 0:
+        fids  /= scale_factor
+        specs /= scale_factor
+    else:
+        scale_factor = 1.0
+
+    ############### Step 11: Assemble BASIS struct ##############
+    dims = {
+        't'       : 1.0,
+        'coils'   : 0.0,
+        'averages': 0.0,
+        'subSpecs': 0.0,
+        'extras'  : 0.0,
+    }
+
+    flags = {
+        'writtentostruct': 1.0,
+        'gotparams'      : 1.0,
+        'leftshifted'    : 1.0,
+        'filtered'       : 0.0,
+        'zeropadded'     : float(final_n > n_native),
+        'freqcorrected'  : 0.0,
+        'phasecorrected' : 0.0,
+        'averaged'       : 1.0,
+        'addedrcvrs'     : 1.0,
+        'subtracted'     : 1.0,
+        'writtentotext'  : 0.0,
+        'downsampled'    : 0.0,
+        'isISIS'         : 0.0,
+        'freqranged'     : 1.0,
+        'addedMM'        : float(add_mm),
+    }
+
+    BASIS = {
+        'spectralwidth' : sw,
+        'dwelltime'     : dt,
+        'n'             : float(final_n),
+        'linewidth'     : 1.0,
+        'Bo'            : Bo,
+        'seq'           : [sequence],
+        'te'            : float(te),
+        'centerFreq'    : center_freq,
+        'ppm'           : ppm_axis.reshape(-1, 1),
+        't'             : t.reshape(-1, 1),
+        'flags'         : flags,
+        'nMM'           : float(n_mm_count),
+        'fids'          : fids,
+        'specs'         : specs,
+        'name'          : met_names,
+        'dims'          : dims,
+        'nMets'         : float(n_mets_only),
+        'sz'            : np.array([final_n, n_mets], dtype=np.uint16),
+        'scale'         : scale_factor,
+    }
+
+    ############### Step 12: Save ##############
+    sio.savemat(outpath, {'BASIS': BASIS})
+
+    print(f"\n{'='*45}")
+    print(f"Saved: {os.path.basename(outpath)}")
+    print(f"  nMets : {n_mets_only}")
+    print(f"  nMM   : {n_mm_count}")
+    print(f"  Total : {n_mets}")
+    print(f"  n     : {final_n}")
+    print(f"  Bo    : {Bo:.3f} T")
+    print(f"  Names : {', '.join(met_names)}")
+    print(f"{'='*45}")
+
+
+############### Helper functions (translated from MATLAB) ##############
+
+def _estimate_one_proton_area(specs, names, ppm):
+    """
+    Estimate area of one proton from Cr (3.93 ppm) or PCr (3.93 ppm).
+    Confirmed from estimateOneProtonArea() in createOspreyBasisSet.m
+    """
+    ppm = np.asarray(ppm).ravel()
+
+    idx_cr  = names.index('Cr')  if 'Cr'  in names else None
+    idx_pcr = names.index('PCr') if 'PCr' in names else None
+
+    if idx_cr is not None:
+        idx, ref_name = idx_cr, 'Cr'
+    elif idx_pcr is not None:
+        idx, ref_name = idx_pcr, 'PCr'
+    else:
+        print("  WARNING: Cr and PCr not found — MM/Lip scaling disabled.")
+        return 0.0
+
+    ref_ppm  = 3.93
+    n_prot   = 3
+    half_win = 0.4
+
+    mask     = (ppm >= ref_ppm - half_win) & (ppm <= ref_ppm + half_win)
+    win_area = np.sum(np.real(specs[mask, idx]))
+    if win_area <= 0:
+        win_area = abs(win_area)
+
+    one_proton_area = win_area / n_prot
+    print(f"\n  oneProtonArea reference: '{ref_name}' at {ref_ppm}+/-{half_win} ppm")
+    print(f"    Window area={win_area:.4e}, oneProtonArea={one_proton_area:.4e}")
+    return one_proton_area
+
+
+def _make_lorentzian(n, sw, hzppm, freq_ppm, fwhm_hz, center_freq, amp):
+    """Synthetic Lorentzian FID and spectrum."""
+    dt      = 1.0 / sw
+    t       = np.arange(n) * dt
+    freq_hz = (freq_ppm - center_freq) * hzppm
+    T2      = 1.0 / (np.pi * fwhm_hz)
+    fid     = amp * np.exp(1j * 2 * np.pi * freq_hz * t) * np.exp(-t / T2)
+    spec    = np.fft.fftshift(np.fft.fft(fid))
+    return fid, spec
+
+
+def _make_gaussian(n, sw, hzppm, freq_ppm, fwhm_hz, center_freq, amp):
+    """Synthetic Gaussian FID and spectrum."""
+    dt      = 1.0 / sw
+    t       = np.arange(n) * dt
+    freq_hz = (freq_ppm - center_freq) * hzppm
+    sigma   = fwhm_hz / (2 * np.sqrt(2 * np.log(2)))
+    T2s     = 1.0 / (2 * np.pi * sigma)
+    fid     = amp * np.exp(1j * 2 * np.pi * freq_hz * t) * np.exp(-(t**2) / (2 * T2s**2))
+    spec    = np.fft.fftshift(np.fft.fft(fid))
+    return fid, spec
+
+
+def _build_mm_lipids(n, sw, hzppm, center_freq, one_proton_area):
+    """
+    Build parametric Gaussian MM/Lip basis functions.
+    Translated directly from buildMMLipids() in createOspreyBasisSet.m
+    Wilson et al. MRM 2011.
+    """
+    def G(ppm_pos, fwhm_frac, n_prot):
+        # Normalise amplitude by area of a unit Gaussian
+        _, g0 = _make_gaussian(n, sw, hzppm, center_freq, 0.1 * hzppm, center_freq, 1.0)
+        g_area = np.sum(np.real(g0))
+        if g_area == 0:
+            g_area = 1.0
+        amp = n_prot * one_proton_area / g_area
+        return _make_gaussian(n, sw, hzppm, ppm_pos, fwhm_frac * hzppm, center_freq, amp)
+
+    f09, s09 = G(0.91, 0.14, 3)
+    f12, s12 = G(1.21, 0.15, 2)
+    f14, s14 = G(1.43, 0.17, 2)
+    f17, s17 = G(1.67, 0.15, 2)
+
+    fa, sa = G(2.08, 0.15, 1.33)
+    fb, sb = G(2.25, 0.20, 0.33)
+    fc, sc = G(1.95, 0.15, 0.33)
+    fd, sd = G(3.00, 0.20, 0.40)
+    f20 = fa + fb + fc + fd
+    s20 = sa + sb + sc + sd
+
+    fl09, sl09 = G(0.89, 0.14, 3)
+
+    fl13a, sl13a = G(1.28, 0.15, 2)
+    fl13b, sl13b = G(1.28, 0.89, 2)
+    fl13 = fl13a + fl13b
+    sl13 = sl13a + sl13b
+
+    fl20a, sl20a = G(2.04, 0.15, 1.33)
+    fl20b, sl20b = G(2.25, 0.15, 0.67)
+    fl20c, sl20c = G(2.80, 0.20, 0.87)
+    fl20 = fl20a + fl20b + fl20c
+    sl20 = sl20a + sl20b + sl20c
+
+    mm_fids  = np.column_stack([f09, f12, f14, f17, f20, fl09, fl13, fl20])
+    mm_specs = np.column_stack([s09, s12, s14, s17, s20, sl09, sl13, sl20])
+    mm_names = ['MM09', 'MM12', 'MM14', 'MM17', 'MM20', 'Lip09', 'Lip13', 'Lip20']
+
+    return mm_fids, mm_specs, mm_names
+
+
+############### Command line usage ##############
+
+if __name__ == '__main__':
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    if len(sys.argv) < 3:
+        print("Usage: python write_osprey.py <input_folder> <output_file> [target_n] [te]")
+        print()
+        print("Example:")
+        print("  python write_osprey.py /path/to/marss_folder /path/to/output/basis.mat 2048 26")
+        sys.exit(1)
+
+    input_path = sys.argv[1]
+    outpath    = sys.argv[2]
+    target_n   = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+    te         = float(sys.argv[4]) if len(sys.argv) > 4 else 30.0
+
+    from readers.read_marss import read_marss_file, read_marss_folder
+
+    if os.path.isdir(input_path):
+        print(f"Reading folder: {input_path}")
+        basis_list = read_marss_folder(input_path)
+    elif os.path.isfile(input_path):
+        print(f"Reading file: {input_path}")
+        basis_list = [read_marss_file(input_path)]
+    else:
+        print(f"Error: {input_path} is not a valid file or folder")
+        sys.exit(1)
+
+    print(f"Loaded {len(basis_list)} metabolites")
+    print()
+
+    write_osprey(basis_list, outpath, target_n=target_n, te=te)

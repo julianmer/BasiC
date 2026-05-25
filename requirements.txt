@@ -1,0 +1,35 @@
+# MRS Basis Set Converter — Python dependencies
+# Install with: pip install -r requirements.txt
+#
+# Python >= 3.9 required
+# tkinter is included with most Python installations (not pip-installable)
+# On Ubuntu/Debian: sudo apt-get install python3-tk
+# On macOS: included with python.org installer
+
+######################## Core (required) ###########################
+numpy>=1.21.0          # array operations, FFT
+scipy>=1.7.0           # .mat file reading/writing (v5 and v7 format)
+
+############ Osprey v7.3 HDF5 .mat files ################
+# Required only when reading Osprey basis sets saved in MATLAB v7.3 format
+mat73>=0.60            # HDF5-based .mat file reading
+# pip install mat73
+
+############### NIfTI-MRS output ########################
+# Required only when converting TO NIfTI-MRS format
+nibabel>=3.2.0         # NIfTI file reading/writing
+# pip install nibabel
+
+########### NIfTI-MRS output (command-line tools) #######
+# Required only when converting TO NIfTI-MRS format
+# These are command-line tools installed via pip, not imported directly
+spec2nii>=0.6.0        # converts .raw → .nii.gz
+# pip install spec2nii
+# fsl_mrs is also required for fsl_mrs_proc (conjugation step)
+# Install FSL-MRS separately: https://open.win.ox.ac.uk/pages/fsl/fsl_mrs/
+
+######################### GUI (tkinter) ###########################
+# tkinter is part of the Python standard library — NOT pip installable
+# macOS:  included with python.org installer
+# Ubuntu: sudo apt-get install python3-tk
+# Windows: included with standard Python installer
