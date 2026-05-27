@@ -74,7 +74,7 @@ class Screen4Convert(BaseScreen):
         thread = threading.Thread(target=self._run_conversion, daemon=True)
         thread.start()
 
-    ############## Context bar #############
+    #################### Context bar ####################
 
     def _build_context_bar(self):
         in_fmt   = self.state.get('detected_format', '—')
@@ -105,7 +105,7 @@ class Screen4Convert(BaseScreen):
             bg="#f3f4f6", fg="#374151"
         ).pack(side="left")
 
-    ############## Progress area #############
+    #################### Progress area #################### 
 
     def _build_progress_area(self):
         self.progress_card = tk.Frame(
@@ -330,7 +330,7 @@ class Screen4Convert(BaseScreen):
         self._output_paths = files
         self.state['output_path'] = outdir
 
-    ############## Conversion logic #############
+    #################### Conversion logic #################### 
 
     def _run_conversion(self):
         """
@@ -358,7 +358,7 @@ class Screen4Convert(BaseScreen):
         tool_id  = self.state.get('output_tool_id', '')
         out_fmt  = self.state.get('output_format', 'default')
 
-        ############## Ask user for output folder #############
+        #################### Ask user for output folder #################### 
         outdir = self.after(0, self._ask_output_folder)
         # Since filedialog must run on main thread, use a synchronized approach
         outdir_holder = [None]
@@ -376,7 +376,7 @@ class Screen4Convert(BaseScreen):
 
         self.after(0, self.progress_title.config, {'text': 'Converting…'})
 
-        ############## Step 1: Load all basis functions #############
+        ##################### Step 1: Load all basis functions #################### 
         self._step("Loading input files", sub=fmt)
         basis_list = self._load_basis(files, fmt)
 
@@ -385,16 +385,17 @@ class Screen4Convert(BaseScreen):
 
         self._step(f"Loaded {len(basis_list)} metabolites")
 
-        ############## Step 2: Apply user params #############
+        # ── Step 2: Apply user params #################### 
         params = self.state.get('params', {})
         if params:
             self._step("Applying user parameters")
             for core_item in basis_list:
                 for key, val in params.items():
-                    if val and key not in core_item:
+                    # Overwrite if missing OR if currently None
+                    if val and (key not in core_item or core_item[key] is None):
                         core_item[key] = val
 
-        ############## Step 3: Run writer #############
+        #################### Step 3: Run writer #################### 
         self._step(f"Writing {self.state.get('output_tool', '')} format",
                    sub=f"output format: {out_fmt}")
 
@@ -402,7 +403,7 @@ class Screen4Convert(BaseScreen):
 
         self._step("Done", sub=f"Output: {outdir}")
 
-        ############## Show output #############
+        ####################  Show output #################### 
         self.after(0, self._set_done, output_paths)
 
     def _load_basis(self, files, fmt):
@@ -619,7 +620,7 @@ class Screen4Convert(BaseScreen):
     def _ask_output_folder(self):
         pass   # placeholder — actual call is in _convert via threading
 
-    ############## Footer #############
+    #################### Footer ####################
 
     def _build_footer(self):
         footer = tk.Frame(self, bg="white", pady=12, padx=20)
@@ -659,7 +660,7 @@ class Screen4Convert(BaseScreen):
             self.state.pop(key, None)
         self.app.show_screen("screen1")
 
-    ############## Utilities #############
+    #################### Utilities ##############################
 
     def _copy_to_clipboard(self, text):
         self.clipboard_clear()
