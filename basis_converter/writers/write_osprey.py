@@ -6,7 +6,7 @@ Translates createOspreyBasisSet.m to Python.
 Assembles a list of core struct dicts into an Osprey-compatible BASIS .mat file.
 
 Pipeline (confirmed from createOspreyBasisSet.m):
-    1. Apply name mapping (MARSS names → Osprey names)
+    1. Apply name mapping (MARSS names -> Osprey names)
     2. Skip SKIP entries and duplicates
     3. Zero-pad FIDs to targetN if needed
     4. DC-correct each FID (remove mean of last 10%)
@@ -28,7 +28,7 @@ import numpy as np
 import scipy.io as sio
 
 
-############## Name mapping (MARSS filename stems → Osprey names) ##############
+############# Name mapping (MARSS filename stems -> Osprey names) #############
 # 'SKIP' means the metabolite is excluded from the Osprey basis set
 
 NAME_MAP = {
@@ -76,8 +76,7 @@ MM_NAMES = {'MM09','MM12','MM14','MM17','MM20',
             'Lip09','Lip13','Lip20','H2O'}
 
 
-############## Main entry point ##############
-
+############# Main entry point #############
 def write_osprey(basis_list, outpath,
                  target_n=0, add_mm=True,
                  te=30.0, sequence='unedited'):
@@ -100,7 +99,7 @@ def write_osprey(basis_list, outpath,
     if not basis_list:
         raise RuntimeError("basis_list is empty")
 
-    ############## Step 1: Apply name mapping, skip duplicates ##############
+    ############# Step 1: Apply name mapping, skip duplicates #############
     met_names = []
     met_fids  = []
     sw = sf = n_native = center_freq = None
@@ -127,12 +126,12 @@ def write_osprey(basis_list, outpath,
 
         met_names.append(osp_name)
         met_fids.append(np.asarray(core['fid']).ravel().astype(complex))
-        print(f"  Loaded: {stem:15s} → {osp_name}")
+        print(f"  Loaded: {stem:15s} -> {osp_name}")
 
     if not met_names:
         raise RuntimeError("No valid basis functions loaded after name mapping.")
 
-    ############## Step 2: Determine final spectral size ##############
+    ############# Step 2: Determine final spectral size #############
     if target_n == 0:
         final_n = n_native
     elif target_n < n_native:
@@ -143,7 +142,7 @@ def write_osprey(basis_list, outpath,
 
     print(f"\n  Native n={n_native}, final n={final_n}")
 
-    ############### Step 3: Spectral axes ##############
+    ############# Step 3: Spectral axes #############
     dt      = 1.0 / sw
     Bo      = sf / 42.577
     hzppm   = sf               # numerically equal (sf in MHz = Hz/ppm)
@@ -151,7 +150,7 @@ def write_osprey(basis_list, outpath,
     f_axis  = (np.arange(final_n) - final_n / 2) * (sw / final_n)
     ppm_axis= f_axis / hzppm + center_freq
 
-    ############### Step 4: Build fids / specs with DC correction ##############
+    ############# Step 4: Build fids / specs with DC correction #############
     n_mets = len(met_names)
     fids   = np.zeros((final_n, n_mets), dtype=complex)
     specs  = np.zeros((final_n, n_mets), dtype=complex)
@@ -162,17 +161,32 @@ def write_osprey(basis_list, outpath,
         pad_fid[:copy_len] = fid[:copy_len]
 
         # DC correction: remove mean of last 10% of FID
-        dc_start = round(0.9 * final_n)
-        if final_n - dc_start > 1:
-            pad_fid -= np.mean(pad_fid[dc_start:])
+        # Zero-fill to 2x length first to ensure FID has decayed fully,
+        # then cut back to original length after correction.
+        # This prevents phase errors for FIDs that haven't fully decayed
+        # within the original point count (e.g. PCr393 at 2048 points).
+        zf_n    = final_n * 2
+        zf_fid  = np.zeros(zf_n, dtype=complex)
+        zf_fid[:final_n] = pad_fid
+        dc_start = round(0.9 * zf_n)
+        if zf_n - dc_start > 1:
+            last_10_max = np.max(np.abs(zf_fid[dc_start:]))
+            overall_max = np.max(np.abs(zf_fid))
+            dc_mean     = np.mean(zf_fid[dc_start:])
+            fid0_mag    = np.abs(zf_fid[0]) if np.abs(zf_fid[0]) > 0 else overall_max
+            decay_ratio = last_10_max / overall_max if overall_max > 0 else 0
+            dc_ratio    = np.abs(dc_mean) / fid0_mag if fid0_mag > 0 else 0
+            if decay_ratio < 0.25 and dc_ratio < 0.10:
+                zf_fid -= dc_mean
+        pad_fid = zf_fid[:final_n]
 
         fids[:, kk]  = pad_fid
         specs[:, kk] = np.fft.fftshift(np.fft.fft(pad_fid))
 
-    ############### Step 5: One-proton area estimate ##############
+    ############# Step 5: One-proton area estimate #############
     one_proton_area = _estimate_one_proton_area(specs, met_names, ppm_axis)
 
-    ############### Step 6: Rescale MM/Lip to proton-equivalent amplitudes ##############
+    ############# Step 6: Rescale MM/Lip to proton-equivalent amplitudes #############
     if one_proton_area > 0:
         print("\n  Rescaling MM/Lip basis functions:")
         for kk, name in enumerate(met_names):
@@ -187,7 +201,7 @@ def write_osprey(basis_list, outpath,
     else:
         print("  WARNING: oneProtonArea=0; MM/Lip functions will NOT be rescaled.")
 
-    ############### Step 7: Add synthetic H2O ##############
+    ############# Step 7: Add synthetic H2O #############
     if 'H2O' not in met_names:
         print("\n  Adding synthetic H2O Lorentzian at 4.68 ppm.")
         amp = max(2 * one_proton_area,
@@ -201,7 +215,7 @@ def write_osprey(basis_list, outpath,
         met_names.append('H2O')
         n_mets += 1
 
-    ############### Step 8: Optionally add parametric MM/Lip ##############
+    ############# Step 8: Optionally add parametric MM/Lip #############
     added_mm_names = []
     if add_mm and one_proton_area > 0:
         print("\n  Adding parametric MM/Lip for missing components:")
@@ -219,7 +233,7 @@ def write_osprey(basis_list, outpath,
             else:
                 print(f"    Skipped (already present): {mm_name}")
 
-    ############### Step 9: Reorder — metabolites first, MM/Lip/H2O last ##############
+    ############# Step 9: Reorder — metabolites first, MM/Lip/H2O last #############
     known_mm = MM_NAMES | set(added_mm_names)
     is_mm    = [name in known_mm for name in met_names]
     met_idx  = [i for i, m in enumerate(is_mm) if not m]
@@ -233,7 +247,7 @@ def write_osprey(basis_list, outpath,
     n_mm_count  = len(mm_idx)
     n_mets_only = len(met_idx)
 
-    ############### Step 10: Normalize ##############
+    ############# Step 10: Normalize #############
     scale_factor = np.max(np.abs(np.real(specs)))
     if scale_factor > 0:
         fids  /= scale_factor
@@ -241,7 +255,7 @@ def write_osprey(basis_list, outpath,
     else:
         scale_factor = 1.0
 
-    ############### Step 11: Assemble BASIS struct ##############
+    ############# Step 11: Assemble BASIS struct #############
     dims = {
         't'       : 1.0,
         'coils'   : 0.0,
@@ -290,7 +304,7 @@ def write_osprey(basis_list, outpath,
         'scale'         : scale_factor,
     }
 
-    ############### Step 12: Save ##############
+    ############# Step 12: Save #############
     sio.savemat(outpath, {'BASIS': BASIS})
 
     print(f"\n{'='*45}")
@@ -304,8 +318,7 @@ def write_osprey(basis_list, outpath,
     print(f"{'='*45}")
 
 
-############### Helper functions (translated from MATLAB) ##############
-
+############# Helper functions (translated from MATLAB) #############
 def _estimate_one_proton_area(specs, names, ppm):
     """
     Estimate area of one proton from Cr (3.93 ppm) or PCr (3.93 ppm).
@@ -409,8 +422,7 @@ def _build_mm_lipids(n, sw, hzppm, center_freq, one_proton_area):
     return mm_fids, mm_specs, mm_names
 
 
-############### Command line usage ##############
-
+############# Command line usage #############
 if __name__ == '__main__':
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -53,7 +53,7 @@ def write_spinwizard(basis_list, outdir):
         # Write — tab separated, matching SpinWizard style
         with open(outpath, 'w') as f:
             for row in data:
-                f.write(f"  {row[0]:12.5f}\t\t  {row[1]:12.5f}\n")
+                f.write(f"  {row[0]:20.10e}\t\t  {row[1]:20.10e}\n")
 
         written.append(outpath)
         names.append(name)
@@ -91,7 +91,7 @@ def write_spinwizard(basis_list, outdir):
     return written
 
 
-############## Command line #############
+# ── Command line ──────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     import sys, os
