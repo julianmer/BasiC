@@ -77,6 +77,8 @@ A sample basis set from each tool is included in the "sample_basis_sets" folder.
 | VeSPA Analysis | `.xml priors` | VIFF XML format |
 | OXSA | `.m script` | Pre-configured MATLAB script |
 
+<h1>Citation</h1>
+If you use this toolbox in your research, please cite:
 
 [![DOI](https://zenodo.org/badge/1249001293.svg)](https://doi.org/10.5281/zenodo.20422239)
 
