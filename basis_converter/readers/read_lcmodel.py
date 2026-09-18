@@ -208,6 +208,9 @@ def read_lcmodel_raw(path, name=None, sw=None, sf=None):
             f"Could not parse FID data from {os.path.basename(path)}"
         )
 
+    # .raw files store the imaginary sign flipped (see write_lcmodel_raw): flip it back
+    fid = np.conj(fid)
+
     if name is None:
         name = os.path.splitext(os.path.basename(path))[0]
 
