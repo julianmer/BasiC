@@ -301,7 +301,8 @@ def write_lcmodel_basis(basis_list, outpath,
 
             for i in range(0, len(vals), 6):
                 chunk = vals[i:i + 6]
-                f.write(" ".join(f"{v:+13.5E}" for v in chunk) + "\n")
+                # fixed-width fields, no separator: FMTBAS (6E13.5) reads 13 characters each
+                f.write("".join(f"{v:13.5E}" for v in chunk) + "\n")
 
     print(f"  Written: {os.path.basename(outpath)} "
           f"({len(basis_list)} metabolites)")
