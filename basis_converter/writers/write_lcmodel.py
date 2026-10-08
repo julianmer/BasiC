@@ -37,10 +37,10 @@ Writes basis set to LCModel format:
     For each metabolite:
         $NMUSED ... $END   ← fitting defaults
         $BASIS ... $END    ← metabolite metadata
-        {FID data}
+        {spectrum data}    ← fft(conj(FID)), written [real, imag]
 
 Key convention (confirmed from step_1_mat_to_raw.py):
-    - Imaginary sign is FLIPPED: write [real, -imag]
+    - .raw: imaginary sign is FLIPPED: write [real, -imag]
     - HZPPPM = sf in MHz (do NOT divide by 1e6 — already MHz)
 
 Entry points:
@@ -291,10 +291,11 @@ def write_lcmodel_basis(basis_list, outpath,
             f.write(" \n")
             f.write(" $END\n")
 
-            # FID data — interleaved real / -imag, 6 values per line (FMTBAS 6E13.5)
+            # spectrum data — LCModel stores a basis as fft(conj(FID)), interleaved
+            # real / imag, 6 values per line (FMTBAS 6E13.5)
             vals = []
-            for z in fid:
-                vals.extend([z.real, -z.imag])
+            for z in np.fft.fft(np.conj(fid)):
+                vals.extend([z.real, z.imag])
 
             for i in range(0, len(vals), 6):
                 chunk = vals[i:i + 6]

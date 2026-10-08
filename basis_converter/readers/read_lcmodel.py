@@ -11,7 +11,8 @@ into the core struct format.
     For each metabolite:
         $NMUSED block  — FILRAW, fitting params (ignored)
         $BASIS block   — ID, METABO, CONC, TRAMP, VOLUME, ISHIFT
-        FID data       — real/imag pairs, FORTRAN format
+        Spectrum data  — real/imag pairs, FORTRAN format (the FFT of the
+                         conjugated FID, as LCModel stores a basis)
 
 .raw file structure:
     $SEQPAR block  — HZPPPM, NUNFIL, DELTAT
@@ -136,6 +137,7 @@ def read_lcmodel_basis(path):
         if fid is None:
             _log(f"  WARNING: could not parse FID for {metabo} — skipping")
             continue
+        fid = np.conj(np.fft.ifft(fid))   # stored as a spectrum: back to the FID
 
         results.append({
             'fid'    : fid,
