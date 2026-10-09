@@ -312,14 +312,15 @@ def write_lcmodel_basis(basis_list, outpath,
             f.write(" $END\n")
 
             # spectrum data — LCModel stores a basis as fft(conj(FID)), interleaved
-            # real / imag, 6 values per line (FMTBAS 6E13.5)
+            # real / imag, 6 values per line in exactly 13 columns each (FMTBAS 6E13.5):
+            # LCModel reads the columns, not the blanks, so a separator shifts every value
             vals = []
             for z in np.fft.fft(np.conj(fid)):
                 vals.extend([z.real, z.imag])
 
             for i in range(0, len(vals), 6):
                 chunk = vals[i:i + 6]
-                f.write(" ".join(f"{v:+13.5E}" for v in chunk) + "\n")
+                f.write("".join(f"{v:13.5E}" for v in chunk) + "\n")   # fixed columns, as Fortran reads
 
     print(f"  Written: {os.path.basename(outpath)} "
           f"({len(basis_list)} metabolites)")
