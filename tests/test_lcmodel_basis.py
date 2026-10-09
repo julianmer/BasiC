@@ -51,3 +51,15 @@ def test_a_basis_survives_a_round_trip(tmp_path):
     with open(first) as a, open(second) as b:
         same = a.read().split('$BASIS1')[1] == b.read().split('$BASIS1')[1]
     assert same, 'the basis changed on its way through'     # not diffed: a whole file
+
+
+def test_a_basis_is_read_by_its_detected_format_without_the_gui():
+    from core.detect import detect_format
+    from core.load import load_basis
+
+    files = [os.path.join(SAMPLES, 'JMRUI', name) for name in ('NAA.txt', 'Cr391.txt')]
+    found = detect_format(files)
+    basis = load_basis(files, found['format'])
+
+    assert 'jMRUI' in found['format'] and [m['name'] for m in basis] == ['NAA', 'Cr391']
+    assert 'tkinter' not in sys.modules
