@@ -164,7 +164,7 @@ def write_fida_folder(basis_list, outdir):
         outpath = os.path.join(outdir, f"{name}.mat")
         try:
             write_fida_file(core, outpath)
-            written.append(name)
+            written.append(outpath)
             print(f"  Written: {name}.mat")
         except Exception as ex:
             failed.append(name)
