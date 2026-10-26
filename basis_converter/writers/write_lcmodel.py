@@ -58,6 +58,8 @@ import os
 import numpy as np
 from datetime import datetime
 
+from writers.centre import fid_at_centre
+
 
 ####################### Main entry point #######################
 
@@ -99,27 +101,6 @@ def write_lcmodel(basis_list, outdir, mode='both',
     return result
 
 
-######################## Centre #######################
-
-# the ppm at 0 Hz an LCModel basis is written for: LCModel reads a .BASIS with 4.65 at 0 Hz (plus
-# the ISHIFT one may state) and moves it to the data's centre, PPMCEN
-LCMODEL_CENTRE = 4.65
-
-
-def _lcmodel_fid(core):
-    """
-    The FID referenced to LCModel's centre: a basis function stating another
-    (centerFreq, e.g. 3.0 ppm in Osprey's own basis sets) is shifted by the
-    difference, so its peaks stay at their ppm. One stating none is taken as it is.
-    """
-    fid    = np.asarray(core['fid']).ravel()
-    centre = core.get('centerFreq')
-    if centre is None or float(centre) == LCMODEL_CENTRE:
-        return fid
-    t = np.arange(len(fid)) / float(core['sw'])
-    return fid * np.exp(2j * np.pi * (float(centre) - LCMODEL_CENTRE) * float(core['sf']) * t)
-
-
 ######################## .raw writer #######################
 
 def write_lcmodel_raw(core, outpath):
@@ -134,7 +115,7 @@ def write_lcmodel_raw(core, outpath):
     outpath = os.path.abspath(outpath)
     os.makedirs(os.path.dirname(outpath), exist_ok=True)
 
-    fid  = _lcmodel_fid(core)
+    fid  = fid_at_centre(core)
     sf   = float(core['sf'])          # MHz — already correct, do NOT divide
     sw   = float(core['sw'])          # Hz
     n    = len(fid)
@@ -259,7 +240,7 @@ def write_lcmodel_basis(basis_list, outpath,
         ######################## Per-metabolite sections #######################
         for core in basis_list:
             name = core.get('name', 'unknown')
-            fid  = _lcmodel_fid(core)
+            fid  = fid_at_centre(core)
 
             # $NMUSED block (fitting defaults — standard values)
             f.write(" $NMUSED\n")
