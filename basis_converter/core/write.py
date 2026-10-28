@@ -27,7 +27,13 @@ def write_basis(basis_list, tool_id, out_fmt, outdir, te=None, seq=None, add_mm=
     Returns
     -------
     list of str, the paths written
+
+    An Osprey set's H2O is for Osprey's water-reference fit only: it is written to an Osprey .mat
+    and left out of every other format, Osprey's .BASIS and NIfTI-MRS among them, as Osprey's own
+    exporters leave it out (io_writelcmBASIS, io_writeTarquinBASIS).
     """
+    if tool_id != 'osprey' or out_fmt in ('basis', 'nifti'):
+        basis_list = [b for b in basis_list if not b.get('water_ref')]
     stated_te = te
     te  = te or 30.0
     seq = seq or 'unedited'
