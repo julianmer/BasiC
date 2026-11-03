@@ -546,14 +546,15 @@ def widgets(widget):
 def convert(seen, key):
     # The conversion thread reaches the widgets through the main loop, so this runs in it.
     app.show_screen('screen4')               # starts the conversion
-    started = [str(screen4.new_btn.cget('state')), str(screen4.back_btn.cget('state'))]
+    back = next(w for w in widgets(screen4) if isinstance(w, tk.Button) and w.cget('text') == '← Back')
+    started = [str(screen4.new_btn.cget('state')), str(back.cget('state'))]
     end = time.time() + 60
     while str(screen4.new_btn.cget('state')) != 'normal' and time.time() < end:
         yield
     labels = [w.cget('text') for w in widgets(screen4.scroll_frame) if isinstance(w, tk.Label)]
     seen[key] = {'title': screen4.progress_title.cget('text'), 'error': labels[-1], 'asked': len(asked),
                  'new conversion, back while converting': started,
-                 'back after': str(screen4.back_btn.cget('state'))}
+                 'back after': str(back.cget('state'))}
 
 
 def seen_now():
