@@ -37,6 +37,10 @@ import subprocess
 import tempfile
 import numpy as np
 
+if __name__ == '__main__':                    # run as a script: find the writers package
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from writers.centre import fid_at_centre
 
 
@@ -225,8 +229,6 @@ def check_dependencies():
 
 if __name__ == '__main__':
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
     if len(sys.argv) < 3:
         print("Usage: python write_niftimrs.py <input_folder_or_file> <output_folder>")
         print()

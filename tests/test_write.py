@@ -660,6 +660,26 @@ def test_fsl_mrs_files_hold_the_conjugate_as_fsl_mrs_stores_it(tmp_path):
     assert np.allclose(load_basis(written, 'FSL-MRS .json')[0]['fid'], naa[0]['fid'])
 
 
+def test_each_writer_runs_from_the_command_line(tmp_path):
+    """Each writer's docstring gives its own command line: run as a script from another folder,
+    it finds the writers package and says how it is used, and OXSA's writes a function it has
+    no literature lines for (placed where it is strongest)."""
+    import glob
+    import shutil
+    import subprocess
+    for path in sorted(glob.glob(os.path.join(ROOT, 'basis_converter', 'writers', 'write_*.py'))):
+        run = subprocess.run([sys.executable, path], cwd=str(tmp_path), capture_output=True, text=True)
+        assert run.returncode == 1 and run.stdout.startswith('Usage:'), (path, run.stderr[-300:])
+
+    unknown = tmp_path / 'unknown'
+    unknown.mkdir()
+    shutil.copy(os.path.join(SAMPLES, 'MARSS', 'basis_functions_metab_mm_mat', 'NAA.mat'), unknown / 'Xyz.mat')
+    oxsa = os.path.join(ROOT, 'basis_converter', 'writers', 'write_oxsa.py')
+    run = subprocess.run([sys.executable, oxsa, str(unknown), str(tmp_path / 'set.m')], cwd=str(tmp_path),
+                         capture_output=True, text=True)
+    assert run.returncode == 0 and (tmp_path / 'set.m').exists(), run.stderr[-300:]
+
+
 def test_mrscloud_files_hold_the_fields_fit_makebasis_reads(tmp_path):
     """Osprey's fit_makeBasis reads FID-A's te and seq of each file, which MRSCloud's own files
     leave out: written, an MRSCloud file holds them, and its echo time is read back."""

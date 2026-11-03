@@ -25,6 +25,10 @@ import os
 import numpy as np
 import scipy.io as sio
 
+if __name__ == '__main__':                    # run as a script: find the writers package
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from writers.centre import fid_at_centre
 
 
@@ -100,8 +104,6 @@ def write_profit(basis_list, outpath):
 
 if __name__ == '__main__':
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
     if len(sys.argv) < 3:
         print("Usage: python write_profit.py <input_folder> <output_file>")
         sys.exit(1)

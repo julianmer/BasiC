@@ -45,6 +45,10 @@ import os
 import numpy as np
 from datetime import datetime
 
+if __name__ == '__main__':                    # run as a script: find the writers package
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from writers.centre import fid_at_centre
 
 
@@ -201,8 +205,6 @@ def write_jmrui_folder(basis_list, outdir):
 ######################## Command line usage #######################
 if __name__ == '__main__':
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
     if len(sys.argv) < 3:
         print("Usage: python write_jmrui.py <input_folder> <output_folder>")
         print()

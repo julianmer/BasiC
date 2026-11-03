@@ -32,6 +32,10 @@ import os
 import numpy as np
 import scipy.io as sio
 
+if __name__ == '__main__':                    # run as a script: find the writers package
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from writers.centre import CENTRE
 
 
@@ -446,8 +450,6 @@ def _build_mm_lipids(n, sw, hzppm, center_freq, one_proton_area):
 ############# Command line usage #############
 if __name__ == '__main__':
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
     if len(sys.argv) < 3:
         print("Usage: python write_osprey.py <input_folder> <output_file> [target_n] [te]")
         print()

@@ -29,6 +29,10 @@ import os
 import csv
 import numpy as np
 
+if __name__ == '__main__':                    # run as a script: find the writers package
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from writers.centre import at_centre
 
 
@@ -243,8 +247,6 @@ def _find_peak_amp(fid, sf, sw, ppm_calib, ppm_min=0.5, ppm_max=4.5):
 
 if __name__ == '__main__':
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
     if len(sys.argv) < 3:
         print("Usage: python write_pyamares.py <input_folder> <output_csv>")
         sys.exit(1)

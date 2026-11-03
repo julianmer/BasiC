@@ -19,6 +19,10 @@ import os
 import numpy as np
 from datetime import datetime
 
+if __name__ == '__main__':                    # run as a script: find the writers package
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from writers.centre import at_centre
 
 
@@ -342,12 +346,20 @@ fprintf(\'\\nResults saved to: %s\\n\', outputDir);
     print(f"\n  Done. OXSA script: {os.path.basename(outpath)}")
 
 
+def _strongest_ppm(core, default_calib):
+    """Where a basis function without literature lines is strongest, between 0.5 and 4.3 ppm."""
+    fid = np.asarray(core['fid']).ravel()
+    sf, sw = float(core.get('sf') or 123.26), float(core.get('sw') or 4000.0)
+    ppm = float(default_calib) + np.fft.fftshift(np.fft.fftfreq(len(fid), 1.0 / sw)) / sf
+    spec = np.abs(np.fft.fftshift(np.fft.fft(fid)))
+    window = (ppm > 0.5) & (ppm < 4.3)
+    return float(ppm[window][np.argmax(spec[window])])
+
+
 ############## Command line ##############
 
 if __name__ == '__main__':
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
     if len(sys.argv) < 3:
         print("Usage: python write_oxsa.py <input_folder> <output.m> [te_ms] [metabList.mat]")
         sys.exit(1)
@@ -362,13 +374,3 @@ if __name__ == '__main__':
                  else [read_marss_file(input_path)]
     print(f"Loaded {len(basis_list)} metabolites\n")
     write_oxsa(basis_list, outpath, seqte=seqte, metablist_path=metablist_path)
-
-
-def _strongest_ppm(core, default_calib):
-    """Where a basis function without literature lines is strongest, between 0.5 and 4.3 ppm."""
-    fid = np.asarray(core['fid']).ravel()
-    sf, sw = float(core.get('sf') or 123.26), float(core.get('sw') or 4000.0)
-    ppm = float(default_calib) + np.fft.fftshift(np.fft.fftfreq(len(fid), 1.0 / sw)) / sf
-    spec = np.abs(np.fft.fftshift(np.fft.fft(fid)))
-    window = (ppm > 0.5) & (ppm < 4.3)
-    return float(ppm[window][np.argmax(spec[window])])

@@ -58,6 +58,10 @@ import os
 import numpy as np
 from datetime import datetime
 
+if __name__ == '__main__':                    # run as a script: find the writers package
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from writers.centre import fid_at_centre
 
 
@@ -329,8 +333,6 @@ def write_lcmodel_basis(basis_list, outpath,
 
 if __name__ == '__main__':
     import sys
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
     if len(sys.argv) < 3:
         print("Usage: python write_lcmodel.py <input_folder> <output_folder> [mode]")
         print()
