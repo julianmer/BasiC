@@ -71,7 +71,7 @@ if __name__ == '__main__':                    # run as a script: find the writer
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from writers.centre import CENTRE, at_centre
-from writers.lines import (TOL, decompose, fit_lines, fwhm, is_hump,
+from writers.lines import (TOL, decompose, fit_lines, fwhm, is_hump, unfilled,
                            set_lineshape)
 
 
@@ -239,6 +239,8 @@ def vespa_lines(basis_list, progress=None, tol=TOL, hump=None):
     report for it, or None where it is left out after all.
     """
     basis_list = at_centre(basis_list)     # the lines' ppm are read at CENTRE
+    points = [np.asarray(core['fid']).size for core in basis_list]     # the spectrum's, for is_hump
+    basis_list = [dict(core, fid=unfilled(core['fid'])) for core in basis_list]
     names = [core.get('name', 'unknown') for core in basis_list]
     if progress:                           # minutes for a set of long FIDs, before any line
         progress("Decomposing each function", f"{len(names)} function{'s' * (len(names) > 1)}, "
@@ -259,7 +261,7 @@ def vespa_lines(basis_list, progress=None, tol=TOL, hump=None):
         sf  = float(core.get('sf') or 123.26)
         sw  = float(core.get('sw') or 4000.0)
 
-        if is_hump(parts, shape, sw / len(fid)):
+        if is_hump(parts, shape, sw / points[count - 1]):
             # no line of the set's lineshape: written as lines, VeSPA would draw sharp ones
             found['humps'].append(met_name)
             found['components'][met_name] = parts

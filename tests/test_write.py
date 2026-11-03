@@ -416,6 +416,24 @@ def test_an_undamped_set_keeps_its_multiplets(tmp_path):
     assert np.allclose(largest[:, 1], 1.5, rtol=0.001)
 
 
+def test_a_zero_filled_set_gives_the_lines_of_the_set_it_was_filled_from():
+    """An FSL-MRS file converted from a .BASIS keeps its 2n points, the second n near 0 (1e-6), as the
+    FSL-MRS sample does. HLSVD fits no damped lines to that edge, so the zero-filling is left off:
+    the lines and the lineshape are those of the FIDs before they were filled."""
+    import numpy as np
+    from writers.write_vespa import vespa_lines
+    folder = os.path.join(SAMPLES, 'JMRUI')
+    basis = load_basis([os.path.join(folder, f'{n}.txt') for n in ('Cr391', 'Lac')], 'jMRUI .txt')
+    rng = np.random.default_rng(0)
+    filled = [dict(b, fid=np.r_[b['fid'], 1e-6 * np.abs(b['fid']).max() * rng.standard_normal(len(b['fid']))],
+                   n=2 * len(b['fid'])) for b in basis]
+    want, got = vespa_lines(basis), vespa_lines(filled)
+
+    assert got['lineshape'] == want['lineshape'] and not got['short'] and not got['humps']
+    for (name, lines, _), (_, filled_lines, _) in zip(want['metabolites'], got['metabolites']):
+        assert np.allclose(np.array(filled_lines)[:, :2], np.array(lines)[:, :2], rtol=1e-3, atol=1e-3), name
+
+
 def test_vespa_lines_rebuild_each_jmrui_function():
     """The jMRUI sample's lines share a 1 Hz Lorentzian (its singlets show it). VeSPA's create_fid
     formula, given the written lines and times that lineshape, as VeSPA's fit applies one

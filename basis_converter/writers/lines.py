@@ -234,6 +234,22 @@ def rebuild(lines, n, sw, damped=True):
     return np.exp(np.outer(t, -d + 2j * np.pi * lines['freq'])) @ lines['amplitude']
 
 
+def unfilled(fid, floor=1e-5):
+    """
+    `fid` without the zero-filling some files keep: an FSL-MRS file converted from a .BASIS
+    holds its 2n points, the second n near 0 (1e-6). HLSVD fits no sum of damped lines to that
+    edge. The points after the last above `floor` times the largest are left off, if they are
+    an eighth of the FID or more. That also takes the tail off a function that decays below
+    `floor` early (a broad hump), which holds nothing at TOL; an undamped FID is kept whole.
+    """
+    fid = np.asarray(fid).ravel()
+    above = np.nonzero(np.abs(fid) > floor * np.abs(fid).max())[0] if fid.size else []
+    if not len(above):
+        return fid
+    end = above[-1] + 1
+    return fid[:end] if len(fid) - end >= len(fid) // 8 else fid
+
+
 ############## Undamped lines times the set's lineshape (what VeSPA rebuilds) #############
 
 SINGLETS = {'cr', 'cr391', 'crno391', 'crch2', 'crch3', 'pcr', 'pcr393', 'pcrno393', 'pcrch2',
