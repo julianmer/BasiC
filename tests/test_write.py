@@ -680,6 +680,34 @@ def test_each_writer_runs_from_the_command_line(tmp_path):
     assert run.returncode == 0 and (tmp_path / 'set.m').exists(), run.stderr[-300:]
 
 
+def test_the_echo_time_written_is_the_one_given_else_the_one_stated(tmp_path):
+    """Every file written for a set holds the echo time given, else the one the set states; a .raw
+    states none where the set states none (FID-A and MRSCloud 0), and a .BASIS or Osprey's .mat,
+    which need one, 30. Without one given, each .raw keeps its own function's."""
+    import scipy.io as sio
+    naa = load_basis([os.path.join(SAMPLES, 'JMRUI', 'NAA.txt')], 'jMRUI .txt')
+    cases = (('stated', [dict(b, te=26.0) for b in naa], None, 26.0, 26.0),
+             ('given', [dict(b, te=26.0) for b in naa], 35.0, 35.0, 35.0),
+             ('none', [dict(b, te=None) for b in naa], None, None, 30.0))
+    for case, basis, te, raw_te, set_te in cases:
+        out = tmp_path / case
+        written = write_basis(basis, 'lcmodel', 'both', str(out / 'lcmodel'), te=te)
+        raw = [p for p in written if p.endswith('.raw')]
+        assert [b['te'] for b in load_basis(raw, 'LCModel .raw')] == [raw_te], case
+        assert load_basis([out / 'lcmodel' / 'basis_set.BASIS'], 'LCModel .BASIS')[0]['te'] == set_te, case
+
+        written = write_basis(basis, 'osprey', 'mat', str(out / 'osprey'), te=te)
+        assert sio.loadmat(written[0], simplify_cells=True)['BASIS']['te'] == set_te, case
+        for tool in ('fida', 'mrscloud'):
+            written = write_basis(basis, tool, 'default', str(out / tool), te=te)
+            back = load_basis(written, detect_format(written)['format'])[0]['te']
+            assert (back or None) == raw_te, (case, tool)      # they hold te 0 where none is stated
+
+    mixed = [dict(naa[0], te=26.0), dict(naa[0], name='Cr', te=35.0)]
+    written = write_basis(mixed, 'lcmodel', 'raw', str(tmp_path / 'mixed'))
+    assert sorted(b['te'] for b in load_basis(written, 'LCModel .raw')) == [26.0, 35.0]
+
+
 def test_mrscloud_files_hold_the_fields_fit_makebasis_reads(tmp_path):
     """Osprey's fit_makeBasis reads FID-A's te and seq of each file, which MRSCloud's own files
     leave out: written, an MRSCloud file holds them, and its echo time is read back."""

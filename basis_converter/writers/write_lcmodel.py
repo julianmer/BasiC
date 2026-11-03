@@ -12,6 +12,7 @@ Writes basis set to LCModel format:
      HZPPPM= {sf}        <- Larmor frequency in MHz (sf, already MHz)
      NUNFIL= {n}         <- number of complex points
      DELTAT= {1/sw}      <- dwell time in seconds
+     ECHOT= {te}         <- echo time in ms, where the function states one
     $END
     $NMID
      ID='{name}'
@@ -77,7 +78,9 @@ def write_lcmodel(basis_list, outdir, mode='both',
     basis_list : list of core struct dicts
     outdir     : str, output directory
     mode       : 'raw' | 'basis' | 'both'
-    te         : float or None, echo time in ms
+    te         : float or None, echo time in ms for every file; if None, each .raw states its
+                 function's own (none if it states none), and the .BASIS the first the set
+                 states, else 30
     seq        : str, sequence name
     description: str or None, basis set description for .BASIS header
 
@@ -89,16 +92,17 @@ def write_lcmodel(basis_list, outdir, mode='both',
     """
     os.makedirs(outdir, exist_ok=True)
     result = {}
+    set_te = te if te is not None else next((c['te'] for c in basis_list if c.get('te')), None)
 
     if mode in ('raw', 'both'):
-        raw_files = write_lcmodel_raw_folder([dict(c, te=c.get('te') or te) for c in basis_list], outdir)
+        raw_files = write_lcmodel_raw_folder([c if te is None else dict(c, te=te) for c in basis_list], outdir)
         result['raw_files'] = raw_files
 
     if mode in ('basis', 'both'):
         basis_path = os.path.join(outdir, 'basis_set.BASIS')
         write_lcmodel_basis(
             basis_list, basis_path,
-            te=te, seq=seq, description=description
+            te=30.0 if set_te is None else set_te, seq=seq, description=description
         )
         result['basis_file'] = basis_path
 
