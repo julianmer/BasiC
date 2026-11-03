@@ -40,7 +40,7 @@ import numpy as np
 import scipy.io as sio
 from datetime import datetime
 
-from writers.centre import fid_at_centre
+from writers.centre import CENTRE, fid_at_centre
 
 
 # Proton gyromagnetic ratio
@@ -132,6 +132,7 @@ def write_fida_file(core, outpath):
         'gamma'         : PROTON_GAMMA,
         't'             : t.reshape(-1, 1),
         'ppm'           : ppm.reshape(-1, 1),
+        'centerFreq'    : CENTRE,              # Osprey's fit_makeBasis takes 3.0 when none is stated
         'sz'            : np.array([n, 1], dtype=float),    # double, as MATLAB's size() is: integer
                                                             # arithmetic on it rounds FID-A's axes
         'te'            : te,

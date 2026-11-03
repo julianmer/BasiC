@@ -619,6 +619,25 @@ def test_an_osprey_set_changed_since_basic_wrote_it_is_read_as_osprey_holds_it(t
     assert {'NAA', 'Cr', 'H2O'} <= set(back) and back['H2O']['water_ref']
 
 
+def test_fida_and_mrscloud_files_state_the_centre_they_are_at(tmp_path):
+    """Osprey's fit_makeBasis puts a file's ppm axis at the centerFreq it states, and at 3.0 ppm
+    when it states none: BasiC's FID-A and MRSCloud files are at 4.65 and say so, in centerFreq
+    and in their ppm axis. A file stating a centerFreq is read at it, as Osprey reads it."""
+    import numpy as np
+    import scipy.io as sio
+    naa = load_basis([os.path.join(SAMPLES, 'JMRUI', 'NAA.txt')], 'jMRUI .txt')
+    for tool, struct in (('fida', 'out'), ('mrscloud', 'outA')):
+        written = write_basis(naa, tool, 'default', str(tmp_path / tool))
+        out = sio.loadmat(written[0], simplify_cells=True)[struct]
+        assert out['centerFreq'] == 4.65, tool
+        assert abs((out['ppm'][0] + out['ppm'][-1]) / 2 - 4.65) < 1e-3, tool
+        assert load_basis(written, detect_format(written)['format'])[0]['centerFreq'] == 4.65, tool
+
+        out['centerFreq'] = 3.0
+        sio.savemat(written[0], {struct: out})
+        assert load_basis(written, detect_format(written)['format'])[0]['centerFreq'] == 3.0, tool
+
+
 def test_mrscloud_files_hold_the_fields_fit_makebasis_reads(tmp_path):
     """Osprey's fit_makeBasis reads FID-A's te and seq of each file, which MRSCloud's own files
     leave out: written, an MRSCloud file holds them, and its echo time is read back."""
