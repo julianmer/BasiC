@@ -307,13 +307,6 @@ def _try_single_mat(path):
     if {'data', 'sw_h', 'sf'}.issubset(keys):
         return _read_and_return_inspector(path)
 
-    ############## ProFit: has 'basis' key with fid (cell array), met, bw, f0 #############
-    if 'basis' in keys:
-        b = raw.get('basis', {})
-        b_keys = set(b.keys()) if isinstance(b, dict) else set()
-        if {'fid', 'met', 'bw', 'f0'}.issubset(b_keys):
-            return _read_and_return_profit(path)
-
     ############## ProFit fallback: top-level fid (cell), met, bw, f0 #############
     if {'fid', 'met', 'bw', 'f0'}.issubset(keys):
         fid_val = raw.get('fid')
