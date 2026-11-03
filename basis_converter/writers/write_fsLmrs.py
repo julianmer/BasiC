@@ -8,8 +8,8 @@ One .json file per metabolite in an output folder.
 FSL-MRS .json structure (confirmed from your documentation):
     {
         "basis": {
-            "basis_re"    : [real FID values],
-            "basis_im"    : [imag FID values],
+            "basis_re"    : [real part of the conjugate FID],
+            "basis_im"    : [imag part of the conjugate FID],
             "basis_dwell" : dwell time in seconds,
             "basis_centre": the spectrometer frequency in MHz (FSL-MRS reads it as
                             centralFrequency = basis_centre * 1E6),
@@ -25,6 +25,8 @@ FSL-MRS .json structure (confirmed from your documentation):
     }
 
 Note:
+    - FSL-MRS stores the conjugate of its FID and conjugates it back on reading
+      (fsl_io: write_fsl_basis_file, readFSLBasisFiles); unconjugated, its NAA is at 7.3 ppm
     - basis_centre is sf in MHz; FSL-MRS stores no ppm reference (its nucleus' default)
     - basis_dwell = 1/sw in seconds
 
@@ -68,8 +70,8 @@ def write_fsLmrs_file(core, outpath):
 
     data = {
         "basis": {
-            "basis_re"    : fid.real.tolist(),
-            "basis_im"    : fid.imag.tolist(),
+            "basis_re"    : fid.conj().real.tolist(),   # conjugated, as FSL-MRS's Basis.save
+            "basis_im"    : fid.conj().imag.tolist(),   # stores it (fsl_io.write_fsl_basis_file)
             "basis_dwell" : dwell,
             "basis_centre": float(sf),
             "basis_width" : None if linewidth is None else float(linewidth),

@@ -638,6 +638,28 @@ def test_fida_and_mrscloud_files_state_the_centre_they_are_at(tmp_path):
         assert load_basis(written, detect_format(written)['format'])[0]['centerFreq'] == 3.0, tool
 
 
+def test_fsl_mrs_files_hold_the_conjugate_as_fsl_mrs_stores_it(tmp_path):
+    """FSL-MRS saves the conjugate of its FID and conjugates it back on reading (fsl_io's
+    write_fsl_basis_file and readFSLBasisFiles); unconjugated, FSL-MRS finds NAA at 7.3 ppm. The
+    FSL-MRS sample, converted from SLASER_Siemens26.basis, reads as that basis, and BasiC's
+    files hold the conjugate of the FID it has."""
+    import json
+    import numpy as np
+    sample = load_basis([os.path.join(SAMPLES, 'FSL-MRS', 'NAA.json')], 'FSL-MRS .json')[0]
+    lcmodel = [b for b in load_basis([os.path.join(SAMPLES, 'LCModel', 'BASIS_file', 'SLASER_Siemens26.basis')],
+                                     'LCModel .BASIS') if b['name'] == 'NAA'][0]
+    fid, got = lcmodel['fid'], sample['fid'][:len(lcmodel['fid'])]          # the sample is zero-filled
+    scale = np.vdot(fid, got) / np.vdot(fid, fid)
+    assert np.linalg.norm(got - scale * fid) < 1e-9 * np.linalg.norm(got)
+
+    naa = load_basis([os.path.join(SAMPLES, 'JMRUI', 'NAA.txt')], 'jMRUI .txt')
+    written = write_basis(naa, 'fsLmrs', 'default', str(tmp_path))
+    with open(written[0]) as f:
+        stored = json.load(f)['basis']
+    assert np.allclose(np.array(stored['basis_re']) + 1j * np.array(stored['basis_im']), np.conj(naa[0]['fid']))
+    assert np.allclose(load_basis(written, 'FSL-MRS .json')[0]['fid'], naa[0]['fid'])
+
+
 def test_mrscloud_files_hold_the_fields_fit_makebasis_reads(tmp_path):
     """Osprey's fit_makeBasis reads FID-A's te and seq of each file, which MRSCloud's own files
     leave out: written, an MRSCloud file holds them, and its echo time is read back."""

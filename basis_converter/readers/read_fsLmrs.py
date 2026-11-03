@@ -5,8 +5,8 @@ Basis Set Converter — FSL-MRS reader
 Reads a folder of FSL-MRS .json basis function files into core struct dicts.
 
 FSL-MRS .json structure (confirmed from your documentation):
-    basis_re     - real part of FID (array)
-    basis_im     - imaginary part of FID (array)
+    basis_re     - real part of the conjugate FID (array), as FSL-MRS stores it
+    basis_im     - imaginary part of the conjugate FID (array)
     basis_dwell  - dwell time in seconds
     basis_centre - the spectrometer (central) frequency in MHz, as FSL-MRS's fsl_io reads
                    it (centralFrequency = basis_centre * 1E6); the ppm reference is not
@@ -89,7 +89,7 @@ def read_fsLmrs_file(path):
     ############## Build complex FID #############
     re  = np.asarray(basis_re,  dtype=float)
     im  = np.asarray(basis_im,  dtype=float)
-    fid = re + 1j * im
+    fid = re - 1j * im         # FSL-MRS stores the conjugate (fsl_io.readFSLBasisFiles)
 
     sw  = 1.0 / float(basis_dwell)
     n   = len(fid)
