@@ -193,10 +193,12 @@ def test_mrscloud_converted_to_basis_is_mrscloud_own_basis(tmp_path):
 
 
 def test_spant_and_abfit_get_the_format_asked_for(tmp_path):
-    """spant and ABfit read a .BASIS (BasiC's recommended output for them) and .raw files."""
+    """spant and ABfit read a .BASIS (BasiC's recommended output for them, and its default) and
+    .raw files."""
     basis = _jmrui()
     for tool in ('spant', 'abfit'):
-        for out_fmt, wanted in (('basis', ['basis_set.BASIS']), ('raw', ['Cr391.raw', 'NAA.raw'])):
+        for out_fmt, wanted in (('basis', ['basis_set.BASIS']), ('raw', ['Cr391.raw', 'NAA.raw']),
+                                ('default', ['basis_set.BASIS'])):
             outdir = tmp_path / tool / out_fmt
             written = write_basis(basis, tool, out_fmt, str(outdir))
 

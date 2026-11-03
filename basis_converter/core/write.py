@@ -58,7 +58,7 @@ def write_basis(basis_list, tool_id, out_fmt, outdir, te=None, seq=None, add_mm=
             return write_niftimrs(basis_list, outdir, te=stated_te)
         from writers.write_lcmodel import write_lcmodel
         result = write_lcmodel(basis_list, outdir,
-                               mode='basis' if out_fmt == 'basis' else 'raw',
+                               mode='raw' if out_fmt == 'raw' else 'basis',
                                te=given_te, seq=seq)
         return result.get('raw_files', []) + \
                ([result['basis_file']] if 'basis_file' in result else [])
