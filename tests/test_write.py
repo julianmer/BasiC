@@ -434,6 +434,19 @@ def test_a_zero_filled_set_gives_the_lines_of_the_set_it_was_filled_from():
         assert np.allclose(np.array(filled_lines)[:, :2], np.array(lines)[:, :2], rtol=1e-3, atol=1e-3), name
 
 
+def test_the_priors_writers_refuse_two_functions_of_one_name(tmp_path):
+    """The priors name each function's lines after it, and VeSPA's importer, PyAMARES and OXSA keep
+    them by name: with two functions named NAA, the second one's lines took the first one's place.
+    Every priors writer now says so."""
+    import pytest
+    folder = os.path.join(SAMPLES, 'JMRUI')
+    basis = load_basis([os.path.join(folder, f'{n}.txt') for n in ('NAA', 'Cr391')], 'jMRUI .txt')
+    twice = [basis[0], dict(basis[1], name='NAA')]
+    for tool in ('vespa_analysis', 'gava', 'midas', 'pyamares', 'oxsa'):
+        with pytest.raises(RuntimeError, match='more than one function is named NAA'):
+            write_basis(twice, tool, 'default', str(tmp_path / tool))
+
+
 def test_vespa_lines_rebuild_each_jmrui_function():
     """The jMRUI sample's lines share a 1 Hz Lorentzian (its singlets show it). VeSPA's create_fid
     formula, given the written lines and times that lineshape, as VeSPA's fit applies one

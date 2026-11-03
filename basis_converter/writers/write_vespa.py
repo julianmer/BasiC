@@ -60,6 +60,7 @@ hold). The literature table is used here for spins only.
 """
 
 import os
+from collections import Counter
 import numpy as np
 from datetime import datetime
 import xml.etree.ElementTree as ET
@@ -214,6 +215,15 @@ def write_vespa(basis_list, outpath,
     print(f"\n  Done. VeSPA prior XML: {os.path.basename(outpath)}")
     print(f"  {len(basis_list)} metabolites  TE={seqte} ms")
 
+def one_name_each(basis_list):
+    """Refuse a set naming two functions alike: VeSPA's importer keeps its metabolites by name
+    (mrs_prior.py), as PyAMARES and OXSA keep each function's rows, so the second one would take
+    the first one's place without a word."""
+    twice = sorted(n for n, k in Counter(str(c.get('name', 'unknown')) for c in basis_list).items() if k > 1)
+    if twice:
+        raise RuntimeError(f"The priors name each function's lines after it, and more than one function "
+                           f"is named {', '.join(twice)}: give each its own name first.")
+
 
 def vespa_lines(basis_list, progress=None, tol=TOL, hump=None):
     """
@@ -238,6 +248,7 @@ def vespa_lines(basis_list, progress=None, tol=TOL, hump=None):
     whose format can hold a hump's own widths (PyAMARES) passes hump(name, components): what to
     report for it, or None where it is left out after all.
     """
+    one_name_each(basis_list)
     basis_list = at_centre(basis_list)     # the lines' ppm are read at CENTRE
     points = [np.asarray(core['fid']).size for core in basis_list]     # the spectrum's, for is_hump
     basis_list = [dict(core, fid=unfilled(core['fid'])) for core in basis_list]
