@@ -259,7 +259,7 @@ def vespa_lines(basis_list, progress=None, tol=TOL, hump=None):
         sf  = float(core.get('sf') or 123.26)
         sw  = float(core.get('sw') or 4000.0)
 
-        if is_hump(parts, shape):
+        if is_hump(parts, shape, sw / len(fid)):
             # no line of the set's lineshape: written as lines, VeSPA would draw sharp ones
             found['humps'].append(met_name)
             found['components'][met_name] = parts

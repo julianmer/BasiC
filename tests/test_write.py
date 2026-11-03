@@ -388,6 +388,34 @@ def test_vespa_lines_are_the_lines_the_fid_holds(tmp_path):
     assert float(ET.parse(path).getroot().find('prior').findtext('seqte')) == 35.0
 
 
+def test_an_undamped_set_keeps_its_multiplets(tmp_path):
+    """A set simulated undamped (the SpinWizard mouse set) measures a 0 Hz lineshape on its singlet.
+    A multiplet's components then come out a hair wide (0.0004 Hz): it is lines, not a hump, while
+    a 30 Hz hump still is one."""
+    import numpy as np
+    sw, sf, n = 4000.0, 123.2618, 2048
+    t = np.arange(n) / sw
+
+    def fid(lines):                                                      # ppm, area
+        return (lines[:, 1] * np.exp(2j * np.pi * np.outer(t, (lines[:, 0] - 4.65) * sf))).sum(axis=1)
+    doublet = np.array([[1.31 + 3.45 / sf, 1.5], [1.31 - 3.45 / sf, 1.5]])
+    hump = 5.0 * np.exp(-np.pi * 30.0 * t + 2j * np.pi * (0.9 - 4.65) * sf * t)
+    basis = [{'name': name, 'fid': f, 'sw': sw, 'sf': sf, 'n': n} for name, f in
+             (('Gly', fid(np.array([[3.548, 2.0]]))), ('Lac', fid(doublet) * np.exp(-np.pi * 0.0004 * t)),
+              ('MM', hump))]
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')                 # no 0 / 0 on a 0 Hz lineshape
+        path = write_basis(basis, 'vespa_analysis', 'default', str(tmp_path))[0]
+    lines, _, comment = _vespa_lines(path)
+
+    assert set(lines) == {'Gly', 'Lac'} and 'wrong): MM.' in comment
+    assert 'Lorentzian 0.000 Hz' in comment            # not a Gaussian of 1e-6 Hz
+    largest = lines['Lac'][np.argsort(lines['Lac'][:, 1])[-2:]]          # with lines at 1e-4 of them
+    assert np.allclose(np.sort(largest[:, 0]), np.sort(doublet[:, 0]), atol=0.001)  # for the 0.0004 Hz
+    assert np.allclose(largest[:, 1], 1.5, rtol=0.001)
+
+
 def test_vespa_lines_rebuild_each_jmrui_function():
     """The jMRUI sample's lines share a 1 Hz Lorentzian (its singlets show it). VeSPA's create_fid
     formula, given the written lines and times that lineshape, as VeSPA's fit applies one

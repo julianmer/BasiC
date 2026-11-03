@@ -332,34 +332,37 @@ def set_lineshape(basis_list, decomposed=None):
     for s in found.values():
         _snap(s)
     shape['singlets'] = found
-    shape['uniform'] = all(abs(fwhm(s) / fwhm(shape) - 1) <= 0.02 and s['kind'] == shape['kind']
+    shape['uniform'] = all(abs(fwhm(s) - fwhm(shape)) <= 0.02 * fwhm(shape) and s['kind'] == shape['kind']
                            for s in found.values())
     return shape
 
 
 def _snap(shape):
-    """Set a width under 1 % of the full width to 0, and name the shape."""
+    """Set a width under 1 % of the full width, or under a millihertz (an undamped set), to 0,
+    and name the shape."""
     full = fwhm(shape)
     for key in ('lorentz', 'gauss'):
-        if shape[key] < 0.01 * full:
+        if shape[key] < max(0.01 * full, 1e-3):
             shape[key] = 0.0
     shape['kind'] = ('Voigt' if shape['lorentz'] and shape['gauss'] else
                      'Gaussian' if shape['gauss'] else 'Lorentzian')
 
 
-def is_hump(lines, shape):
+def is_hump(lines, shape, resolution=0.0):
     """
     Whether a function, decomposed into `lines`, is a hump rather than lines of the set's
     lineshape: none of its components with at least 1 % of its largest amplitude is narrower
     than HUMP_WIDTH times the set's full width (MM09's 10 Hz, the Osprey and MRSCloud sets'
     35-40 Hz macromolecules and lipids, against 1 Hz). Undamped lines times the set's lineshape
-    can rebuild such a FID only as a comb of sharp lines, which is not its spectrum.
+    can rebuild such a FID only as a comb of sharp lines, which is not its spectrum. The width
+    is at least the spectrum's `resolution` (sw / n, Hz): an undamped set (0 Hz) would otherwise
+    call any line with the least width a hump.
     """
     a = np.abs(lines['amplitude'])
     if not len(a):
         return False
     narrowest = np.min(lines['damping'][a >= 0.01 * a.max()]) / np.pi
-    return narrowest > HUMP_WIDTH * fwhm(shape)
+    return narrowest > HUMP_WIDTH * max(fwhm(shape), resolution)
 
 
 def fit_lines(fid, sw, shape, tol=TOL, lines=None, max_lines=MAX_LINES):
