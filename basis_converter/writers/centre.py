@@ -10,7 +10,7 @@ sets) is shifted by the difference before it is written, so its peaks stay at th
 A ppmCalib is not a centre: MARSS and SpinWizard files state 4.675, but their functions are
 at 4.65 (read there, NAA is at 2.008 ppm, creatine at 3.027 and 3.913, choline at 3.185).
 Used by write_lcmodel, write_niftimrs, write_fsLmrs, write_jmrui, write_fida, write_mrscloud,
-write_inspector, write_profit, write_marss and write_spinwizard,
+write_inspector, write_profit, write_marss, write_spinwizard and write_osprey (at the centre it states),
 and, through at_centre, by the writers of prior knowledge (MIDAS, GAVA, VeSPA, PyAMARES, OXSA).
 """
 

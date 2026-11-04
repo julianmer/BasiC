@@ -710,6 +710,41 @@ def test_the_echo_time_written_is_the_one_given_else_the_one_stated(tmp_path):
     assert sorted(b['te'] for b in load_basis(written, 'LCModel .raw')) == [26.0, 35.0]
 
 
+def test_an_osprey_set_stating_two_centres_is_written_at_one(tmp_path):
+    """MRSCloud's v2 sets hold their metabolites with 4.68 ppm at 0 Hz and their MM at centerFreq.
+    Osprey's .mat states one centre, the first function's, so each function is moved to it:
+    NAA and MM09 stay where they are on the .mat's ppm axis, and in the set given, read back. A
+    function stating no centre is at 4.65 and is moved too."""
+    import numpy as np
+    import scipy.io as sio
+    sw, n, Bo = 4000.0, 2048, 2.89
+    sf, t = Bo * 42.577, np.arange(n) / sw
+    line = lambda ppm, centre: np.exp(2j * np.pi * (ppm - centre) * sf * t - t / 0.05)
+    path = str(tmp_path / 'v2.mat')
+    sio.savemat(path, {'BASIS': {
+        'fids': np.stack([line(2.008, 4.68), line(0.91, 3.0)], axis=1),
+        'name': np.array(['NAA', 'MM09'], dtype=object), 'nMets': 1, 'spectralwidth': sw, 'n': n,
+        'Bo': Bo, 'te': 30.0, 'seq': 'unedited', 'centerFreq': 3.0, 'mrsCloudVersion': 'v2'}})
+    written = write_basis(load_basis([path], 'Osprey .mat'), 'osprey', 'mat', str(tmp_path / 'out'), add_mm=False)
+
+    b = sio.loadmat(written[0], squeeze_me=True, struct_as_record=False)['BASIS']
+    names, specs, ppm = [str(x) for x in np.ravel(b.name)], np.asarray(b.specs), np.asarray(b.ppm).ravel()
+    for name, want in (('NAA', 2.008), ('MM09', 0.91)):
+        assert abs(ppm[np.argmax(np.abs(specs[:, names.index(name)]))] - want) < 0.02, name
+    for core in load_basis(written, 'Osprey .mat'):                     # the set given, read back
+        freq = np.fft.fftshift(np.fft.fftfreq(len(core['fid']), 1 / core['sw']))
+        peak = core['centerFreq'] + freq[np.argmax(np.abs(np.fft.fftshift(np.fft.fft(core['fid']))))] / core['sf']
+        assert abs(peak - {'NAA': 2.008, 'MM09': 0.91}[core['name']]) < 0.02, core['name']
+
+    # a function stating no centre is at 4.65, beside one stating 3.0
+    mixed = [{'name': 'NAA', 'fid': line(2.008, 3.0), 'sw': sw, 'sf': sf, 'n': n, 'centerFreq': 3.0},
+             {'name': 'Cr', 'fid': line(3.027, 4.65), 'sw': sw, 'sf': sf, 'n': n}]
+    written = write_basis(mixed, 'osprey', 'mat', str(tmp_path / 'mixed'), add_mm=False)
+    b = sio.loadmat(written[0], squeeze_me=True, struct_as_record=False)['BASIS']
+    names, specs, ppm = [str(x) for x in np.ravel(b.name)], np.asarray(b.specs), np.asarray(b.ppm).ravel()
+    assert abs(ppm[np.argmax(np.abs(specs[:, names.index('Cr')]))] - 3.027) < 0.02
+
+
 def test_mrscloud_files_hold_the_fields_fit_makebasis_reads(tmp_path):
     """Osprey's fit_makeBasis reads FID-A's te and seq of each file, which MRSCloud's own files
     leave out: written, an MRSCloud file holds them, and its echo time is read back."""

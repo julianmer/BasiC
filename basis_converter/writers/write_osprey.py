@@ -36,7 +36,7 @@ if __name__ == '__main__':                    # run as a script: find the writer
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from writers.centre import CENTRE
+from writers.centre import CENTRE, fid_at_centre
 
 
 ############# Name mapping (MARSS filename stems -> Osprey names) #############
@@ -137,7 +137,7 @@ def write_osprey(basis_list, outpath,
         if osp_name in met_names:
             if stem in PARTS:
                 met_fids[met_names.index(osp_name)] = \
-                    met_fids[met_names.index(osp_name)] + np.asarray(core['fid']).ravel().astype(complex)
+                    met_fids[met_names.index(osp_name)] + _at(core, center_freq).astype(complex)
                 print(f"  Summed: {stem:15s} -> {osp_name}")
             else:
                 print(f"  Skipping duplicate '{osp_name}' from: {stem}")
@@ -152,7 +152,8 @@ def write_osprey(basis_list, outpath,
             center_freq = float(core.get('centerFreq') or CENTRE)
 
         met_names.append(osp_name)
-        met_fids.append(np.asarray(core['fid']).ravel().astype(complex))
+        # at the one centre the .mat states: a set may state two (MRSCloud's v2 sets)
+        met_fids.append(_at(core, center_freq).astype(complex))
         print(f"  Loaded: {stem:15s} -> {osp_name}")
 
     if not met_names:
@@ -311,7 +312,7 @@ def write_osprey(basis_list, outpath,
         'nMets'         : float(n_mets_only),
         'sz'            : np.array([final_n, n_mets], dtype=float),   # double, as MATLAB's size() is
         'scale'         : scale_factor,
-        'BasiC'         : _given(basis_list, fids),
+        'BasiC'         : _given(basis_list, fids, center_freq),
     }
 
     ############# Step 12: Save #############
@@ -328,21 +329,26 @@ def write_osprey(basis_list, outpath,
     print(f"{'='*45}")
 
 
-def _given(basis_list, fids):
+def _given(basis_list, fids, center_freq):
     """The set as BasiC was given it: what Osprey's model changes (names, creatine's parts, the
     first point, the scale) and what it adds (MM, lipids, water) undone, read back. The names, the
     FIDs (zero-filled to the longest) and their lengths, which of them was an Osprey set's water,
     and the sum of each function's magnitude as written, by which the reader tells that the
-    functions are still those it wrote."""
+    functions are still those it wrote. Each FID is at `center_freq`, the one centre the .mat states."""
     n = [len(np.ravel(c['fid'])) for c in basis_list]
     given = np.zeros((max(n), len(n)), dtype=complex)
     for k, c in enumerate(basis_list):
-        given[:n[k], k] = np.ravel(c['fid'])
+        given[:n[k], k] = _at(c, center_freq)
     return {'name' : np.array([c['name'] for c in basis_list], dtype=object).reshape(1, -1),
             'fids' : given,
             'n'    : np.array(n, dtype=float),
             'water': np.array([bool(c.get('water_ref')) for c in basis_list], dtype=float),
             'check': np.sum(np.abs(fids), axis=0)}
+
+
+def _at(core, centre):
+    """A function's FID at `centre`: one stating no centre is at CENTRE (4.65), as the .mat takes it."""
+    return fid_at_centre(dict(core, centerFreq=core.get('centerFreq') or CENTRE), centre)
 
 
 ############# Helper functions (translated from MATLAB) #############
