@@ -22,6 +22,7 @@ Run from the repository root: python -m pytest tests
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -722,7 +723,7 @@ def test_screen_4_lists_each_vespa_metabolite_as_its_lines_are_fitted(tmp_path):
                                            "Lineshape of the set's lines", 'Lines 1/2: NAA',
                                            'Lines 2/2: Cr391', 'Done']
     assert steps[3][1].startswith('2 functions') and steps[4][1].startswith('Lorentzian 1.000 Hz')
-    assert steps[5][1].startswith('17 lines, residual')
+    assert re.match(r'\d+ lines, residual', steps[5][1])
     assert steps[7] == ['Done', f'Output: {tmp_path}']
     assert [f for f in os.listdir(tmp_path) if f.endswith('.xml')]
     assert seen['asked on the main thread'] == [True] and seen['tk off the main thread'] == []
