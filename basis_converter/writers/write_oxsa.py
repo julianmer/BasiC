@@ -216,7 +216,7 @@ def write_oxsa(basis_list, outpath, seqte=None, tol=TOL, progress=None):
                   '1', str(first), '1',
                   '[]' if row == 1 else _num(rel),
                   '[]', '1' if row == 1 else '0',
-                  '[]' if row == 1 or abs(own_lw - lw_r) < 1e-12 else _num(own_lw - lw_r)]
+                  '[]' if row == 1 or own_lw - lw_r < 1e-12 else _num(own_lw - lw_r)]  # never below 0
             if voigt:
                 bounds.append('[0,inf]' if is_line else '[]')
                 iv.append(_num(sigma0) if is_line else '0')

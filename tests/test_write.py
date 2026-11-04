@@ -447,6 +447,27 @@ def test_the_priors_writers_refuse_two_functions_of_one_name(tmp_path):
             write_basis(twice, tool, 'default', str(tmp_path / tool))
 
 
+def test_an_oxsa_hump_component_narrower_than_the_reference_has_no_negative_offset(tmp_path):
+    """OXSA holds a hump's components as rows whose linewidth is the reference line's plus an offset.
+    A component narrower than the reference (a sharp component too small to count against the hump)
+    gave a negative offset, which OXSA's initializePriorKnowledge cannot bound: the offset is now
+    never below 0."""
+    import numpy as np
+    sw, sf, n = 4000.0, 123.2618, 2048
+    t = np.arange(n) / sw
+    lorentz = lambda ppm, width, amp: amp * np.exp(-np.pi * width * t + 2j * np.pi * (ppm - 4.65) * sf * t)
+    basis = [{'name': name, 'fid': f, 'sw': sw, 'sf': sf, 'n': n} for name, f in
+             (('Gly', lorentz(3.548, 2.0, 2.0)),
+              ('MM', lorentz(0.9, 30.0, 5.0) + lorentz(1.2, 1.0, 0.02)))]      # a sharp 0.4 % beside the hump
+    path = write_basis(basis, 'oxsa', 'default', str(tmp_path))[0]
+    _, comment, fields, peaks = _oxsa_pk(path)
+
+    rows = [p for p in peaks if p['IV']['peakName'].startswith('MM')]
+    assert len(rows) >= 2 and 'damped component' in ' '.join(comment)
+    assert all(p['PK']['base_linewidth'] is None or p['PK']['base_linewidth'] >= 0 for p in rows)
+    assert any(p['PK']['base_linewidth'] is None and p['PK']['G_linewidth'] is not None for p in rows[1:])
+
+
 def test_vespa_lines_rebuild_each_jmrui_function():
     """The jMRUI sample's lines share a 1 Hz Lorentzian (its singlets show it). VeSPA's create_fid
     formula, given the written lines and times that lineshape, as VeSPA's fit applies one
