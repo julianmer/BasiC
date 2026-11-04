@@ -2,8 +2,9 @@
 writers/centre.py
 Basis Set Converter — the ppm centre a basis is written for
 
-Formats that store no ppm reference are read at a fixed one: 4.65 ppm for 1H, LCModel's
-PPMCEN, FSL-MRS's nucleus default (for its .json and NIfTI-MRS), the centre jMRUI, INSPECTOR,
+Formats that store no ppm reference are read at a fixed one: 4.65 ppm for 1H, where LCModel
+reads a .BASIS (before the ISHIFT one may state), FSL-MRS's nucleus default (for its .json
+and NIfTI-MRS), the centre jMRUI, INSPECTOR,
 ProFit, MARSS and SpinWizard are read at and the ppm axis the FID-A and MRSCloud writers
 store. A basis function stating another (centerFreq, e.g. 3.0 ppm in Osprey's own basis
 sets) is shifted by the difference before it is written, so its peaks stay at their ppm.
